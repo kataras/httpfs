@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -34,6 +36,14 @@ func FileServer(fs http.FileSystem, options Options) http.HandlerFunc {
 		options.DirList = DirList
 	}
 
+	// Make sure PushTarget's paths are in the proper form.
+	for path, filenames := range options.PushTargets {
+		for idx, filename := range filenames {
+			filenames[idx] = filepath.ToSlash(filename)
+		}
+		options.PushTargets[path] = filenames
+	}
+
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		name := prefix(r.URL.Path, "/")
 		r.URL.Path = name
@@ -52,6 +62,7 @@ func FileServer(fs http.FileSystem, options Options) http.HandlerFunc {
 		}
 
 		indexFound := false
+		// var indexDirectory http.File
 		// use contents of index.html for directory, if present
 		if info.IsDir() && options.IndexName != "" {
 			index := strings.TrimSuffix(name, "/") + options.IndexName
@@ -60,9 +71,11 @@ func FileServer(fs http.FileSystem, options Options) http.HandlerFunc {
 				defer fIndex.Close()
 				infoIndex, err := fIndex.Stat()
 				if err == nil {
+					indexFound = true
+					// Save the old index so we can read its contents from.
+					// indexDirectory = f
 					info = infoIndex
 					f = fIndex
-					indexFound = true
 				}
 			}
 		}
@@ -131,7 +144,7 @@ func FileServer(fs http.FileSystem, options Options) http.HandlerFunc {
 			}
 		}
 
-		if indexFound && len(options.PushTargets) > 0 && !options.Attachments.Enable {
+		if indexFound && !options.Attachments.Enable {
 			if indexAssets, ok := options.PushTargets[r.URL.Path]; ok {
 				if pusher, ok := w.(http.Pusher); ok {
 					// Let's not try to use relative, give developer a clean control.
@@ -141,7 +154,14 @@ func FileServer(fs http.FileSystem, options Options) http.HandlerFunc {
 					// }
 					// path.Join(rel, indexAsset)
 					for _, indexAsset := range indexAssets {
-						pusher.Push(indexAsset, nil)
+						if indexAsset[0] != '/' {
+							// it's relative path.
+							indexAsset = path.Join(r.RequestURI, indexAsset)
+						}
+
+						if err = pusher.Push(indexAsset, nil); err != nil {
+							break
+						}
 					}
 				}
 			}

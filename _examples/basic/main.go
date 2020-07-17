@@ -20,11 +20,15 @@ var opts = httpfs.Options{
 	// that's why we use ListenAndServeTLS below.
 	PushTargets: map[string][]string{
 		"/": { // Relative path without prefix.
-			"/public/favicon.ico", // Full paths.
-			"/public/js/main.js",
-			"/public/css/main.css",
+			"favicon.ico",
+			"js/main.js",
+			"css/main.css",
+			// ^ Relative to the index, if need absolute ones start with a slash ('/').
 		},
 	},
+	// PushTargetsRegex: map[string]*regexp.Regexp{
+	// 	"/": regexp.MustCompile("."),
+	// },
 	// Enable compression based on the request's Accept-Encoding header.
 	Compress: true,
 	// Enable directory listing when no index file (if not empty).

@@ -37,11 +37,16 @@ type Options struct {
 	// Defaults to "/index.html", if request path is ending with **/*/$IndexName
 	// then it redirects to **/*(/).
 	IndexName string
-	// PushTargets optionally absolute filenames (map's value) to be served without any
-	// additional client's requests (HTTP/2 Push)
-	// when a specific path (map's key WITHOUT prefix) is requested and
-	// it's not a directory (it's an `IndexFile`).
+	// PushTargets filenames (map's value) to
+	// be served without additional client's requests (HTTP/2 Push)
+	// when a specific request path (map's key WITHOUT prefix)
+	// is requested and it's not a directory (it's an `IndexFile`).
 	PushTargets map[string][]string
+	// TODO:
+	// PushTargetsRegex like `PushTargets` but accepts regexp which
+	// is compared against all files at serve-time.
+	// PushTargetsRegex map[string]*regexp.Regexp
+
 	// When files should served under compression.
 	Compress bool
 
