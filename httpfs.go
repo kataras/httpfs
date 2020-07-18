@@ -23,7 +23,7 @@ import (
 // Usage:
 // fileSystem := http.Dir("./assets")
 // fileServer := FileServer(fileSystem, DefaultOptions)
-func FileServer(fs http.FileSystem, options Options) http.HandlerFunc {
+func FileServer(fs http.FileSystem, options Options) http.Handler {
 	if fs == nil {
 		panic("FileServer: nil file system")
 	}
@@ -167,16 +167,19 @@ func FileServer(fs http.FileSystem, options Options) http.HandlerFunc {
 
 			if regex, ok := options.PushTargetsRegexp[r.URL.Path]; ok {
 				if pusher, ok := w.(http.Pusher); ok {
-					for _, indexAsset := range getFilenamesRecursively(fs, indexDirectory, "") {
+					prefixURL := strings.TrimSuffix(r.RequestURI, name)
+
+					for _, indexAsset := range getFilenamesRecursively(fs, indexDirectory, name) {
 						// it's an index file, do not pushed that.
 						if strings.HasSuffix("/"+indexAsset, options.IndexName) {
 							continue
 						}
+
 						// match using relative path (without the first '/' slash)
 						// to keep consistency between the `PushTargets` behavior
 						if regex.MatchString(indexAsset) {
 							// println("Regex Matched: " + indexAsset)
-							if err = pusher.Push(path.Join(r.RequestURI, indexAsset), nil); err != nil {
+							if err = pusher.Push(path.Join(prefixURL, indexAsset), nil); err != nil {
 								break
 							}
 						}
@@ -188,7 +191,7 @@ func FileServer(fs http.FileSystem, options Options) http.HandlerFunc {
 		http.ServeContent(w, r, info.Name(), info.ModTime(), content)
 	}
 
-	return handler
+	return http.HandlerFunc(handler)
 }
 
 func getFilenamesRecursively(fs http.FileSystem, f http.File, parent string) []string {

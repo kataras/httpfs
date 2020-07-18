@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -51,18 +52,24 @@ func EmbeddedDir(vdir string,
 			continue
 		}
 
-		names = append(names, strings.TrimPrefix(name, vdir))
+		names = append(names, filepath.ToSlash(name))
 	}
 
 	if len(names) == 0 {
 		panic("FileServer: zero embedded files")
 	}
 
-	asset := func(name string) ([]byte, error) {
-		return assetFn(vdir + name)
-	}
+	asset := assetFn
+	// make .Name() infos like http.Dir (base names instead of full names).
 	assetInfo := func(name string) (os.FileInfo, error) {
-		return assetInfoFn(vdir + name)
+		info, err := assetInfoFn(name)
+		if err != nil {
+			return nil, err
+		}
+		return &embeddedBaseFileInfo{
+			baseName: path.Base(info.Name()),
+			FileInfo: info,
+		}, nil
 	}
 
 	dirNames := make(map[string]*embeddedDir)
@@ -122,6 +129,8 @@ type embeddedFileSystem struct {
 
 var _ http.FileSystem = (*embeddedFileSystem)(nil)
 
+// Open implements FileSystem using os.Open, opening files for reading rooted
+// and relative to the virtual directory.
 func (fs *embeddedFileSystem) Open(name string) (http.File, error) {
 	if name != "/" {
 		// http://localhost:8080/app2/app2app3/dirs/
@@ -129,6 +138,7 @@ func (fs *embeddedFileSystem) Open(name string) (http.File, error) {
 		name = strings.TrimSuffix(name, "/")
 	}
 
+	name = path.Join(fs.vdir, path.Clean("/"+name))
 	if d, ok := fs.dirNames[name]; ok {
 		return d, nil
 	}
@@ -141,6 +151,7 @@ func (fs *embeddedFileSystem) Open(name string) (http.File, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &embeddedFile{
 		FileInfo:   info,
 		ReadSeeker: bytes.NewReader(b),
@@ -173,6 +184,7 @@ type embeddedBaseFileInfo struct {
 
 func (info *embeddedBaseFileInfo) Name() string {
 	return info.baseName
+	// return path.Base(info.Name())
 }
 
 type embeddedDir struct {

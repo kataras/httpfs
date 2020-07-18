@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"regexp"
 
 	"github.com/kataras/httpfs"
 )
@@ -19,12 +20,12 @@ import (
 
 var opts = httpfs.Options{
 	IndexName: "/index.html",
-	PushTargets: map[string][]string{
-		"/": {
-			"/public/favicon.ico",
-			"/public/js/main.js",
-			"/public/css/main.css",
-		},
+	PushTargetsRegexp: map[string]*regexp.Regexp{
+		// Match all js, css and ico files
+		// from all files (recursively).
+		// "/": regexp.MustCompile("((.*).js|(.*).css|(.*).ico)$"),
+		"/":              httpfs.MatchCommonAssets,
+		"/app2/app2app3": httpfs.MatchCommonAssets,
 	},
 	Compress: true,
 	ShowList: true,
@@ -33,8 +34,10 @@ var opts = httpfs.Options{
 func main() {
 	fileSystem := httpfs.EmbeddedDir("./assets", Asset, AssetInfo, AssetNames)
 	fileServer := httpfs.FileServer(fileSystem, opts)
+	// fileServer = http.StripPrefix("/public/", fileServer)
+	// http.Handle("/public/", fileServer)
 	http.Handle("/", fileServer)
 
-	log.Println("Server started at: http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Println("Server started at: https://127.0.0.1")
+	log.Fatal(http.ListenAndServeTLS(":443", "../basic/mycert.crt", "../basic/mykey.key", nil))
 }

@@ -62,6 +62,7 @@ func main() {
 	// With a prefix, use the httpfs.StripPrefix:
 	fileServer := httpfs.FileServer(http.Dir("./assets"), opts)
 	http.Handle("/public/", http.StripPrefix("/public/", fileServer))
+	// http.Handle("/", fileServer)
 
 	log.Println("Server started at: https://127.0.0.1:443")
 	// Navigate through:
