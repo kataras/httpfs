@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"regexp"
 
 	"github.com/kataras/httpfs"
 )
@@ -18,17 +19,20 @@ var opts = httpfs.Options{
 	//
 	// Note: Requires running server under TLS,
 	// that's why we use ListenAndServeTLS below.
-	PushTargets: map[string][]string{
-		"/": { // Relative path without prefix.
-			"favicon.ico",
-			"js/main.js",
-			"css/main.css",
-			// ^ Relative to the index, if need absolute ones start with a slash ('/').
-		},
-	},
-	// PushTargetsRegex: map[string]*regexp.Regexp{
-	// 	"/": regexp.MustCompile("."),
+	// PushTargets: map[string][]string{
+	// 	"/": { // Relative path without prefix.
+	// 		"favicon.ico",
+	// 		"js/main.js",
+	// 		"css/main.css",
+	// 		// ^ Relative to the index, if need absolute ones start with a slash ('/').
+	// 	},
 	// },
+	PushTargetsRegexp: map[string]*regexp.Regexp{
+		// Match all js, css and ico files
+		// from all files (recursively).
+		// "/": regexp.MustCompile("((.*).js|(.*).css|(.*).ico)$"),
+		"/": httpfs.MatchCommonAssets,
+	},
 	// Enable compression based on the request's Accept-Encoding header.
 	Compress: true,
 	// Enable directory listing when no index file (if not empty).

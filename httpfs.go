@@ -62,7 +62,7 @@ func FileServer(fs http.FileSystem, options Options) http.HandlerFunc {
 		}
 
 		indexFound := false
-		// var indexDirectory http.File
+		var indexDirectory http.File
 		// use contents of index.html for directory, if present
 		if info.IsDir() && options.IndexName != "" {
 			index := strings.TrimSuffix(name, "/") + options.IndexName
@@ -71,9 +71,8 @@ func FileServer(fs http.FileSystem, options Options) http.HandlerFunc {
 				defer fIndex.Close()
 				infoIndex, err := fIndex.Stat()
 				if err == nil {
+					indexDirectory = f
 					indexFound = true
-					// Save the old index so we can read its contents from.
-					// indexDirectory = f
 					info = infoIndex
 					f = fIndex
 				}
@@ -165,12 +164,63 @@ func FileServer(fs http.FileSystem, options Options) http.HandlerFunc {
 					}
 				}
 			}
+
+			if regex, ok := options.PushTargetsRegexp[r.URL.Path]; ok {
+				if pusher, ok := w.(http.Pusher); ok {
+					for _, indexAsset := range getFilenamesRecursively(fs, indexDirectory, "") {
+						// it's an index file, do not pushed that.
+						if strings.HasSuffix("/"+indexAsset, options.IndexName) {
+							continue
+						}
+						// match using relative path (without the first '/' slash)
+						// to keep consistency between the `PushTargets` behavior
+						if regex.MatchString(indexAsset) {
+							// println("Regex Matched: " + indexAsset)
+							if err = pusher.Push(path.Join(r.RequestURI, indexAsset), nil); err != nil {
+								break
+							}
+						}
+					}
+				}
+			}
 		}
 
 		http.ServeContent(w, r, info.Name(), info.ModTime(), content)
 	}
 
 	return handler
+}
+
+func getFilenamesRecursively(fs http.FileSystem, f http.File, parent string) []string {
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil
+	}
+
+	var filenames []string
+
+	if info.IsDir() {
+		fileinfos, err := f.Readdir(-1)
+		if err != nil {
+			return nil
+		}
+
+		for _, fileinfo := range fileinfos {
+			fullname := path.Join(parent, fileinfo.Name())
+			ff, err := fs.Open(fullname)
+			if err != nil {
+				return nil
+			}
+
+			filenames = append(filenames, getFilenamesRecursively(fs, ff, fullname)...)
+		}
+
+		return filenames
+	}
+
+	filenames = append(filenames, path.Dir(path.Join(parent, info.Name())))
+	return filenames
 }
 
 // rateReadSeeker is a io.ReadSeeker that is rate limited by

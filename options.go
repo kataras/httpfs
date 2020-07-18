@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -31,6 +32,13 @@ var DefaultOptions = Options{
 	ShowList:  false,
 }
 
+// MatchCommonAssets is a simple regex expression which
+// can be used on `Options.PushTargetsRegexp`.
+// It will match and Push
+// all available js, css, font and media files.
+// Ideal for Single Page Applications.
+var MatchCommonAssets = regexp.MustCompile("((.*).js|(.*).css|(.*).ico|(.*).png|(.*).ttf|(.*).svg|(.*).webp|(.*).gif)$")
+
 // Options contains the optional settings that
 // `FileServer` and `Party#HandleDir` can use to serve files and assets.
 type Options struct {
@@ -41,11 +49,22 @@ type Options struct {
 	// be served without additional client's requests (HTTP/2 Push)
 	// when a specific request path (map's key WITHOUT prefix)
 	// is requested and it's not a directory (it's an `IndexFile`).
+	//
+	// Example:
+	// 	"/": {
+	// 		"favicon.ico",
+	// 		"js/main.js",
+	// 		"css/main.css",
+	// 	}
 	PushTargets map[string][]string
-	// TODO:
-	// PushTargetsRegex like `PushTargets` but accepts regexp which
-	// is compared against all files at serve-time.
-	// PushTargetsRegex map[string]*regexp.Regexp
+	// PushTargetsRegexp like `PushTargets` but accepts regexp which
+	// is compared against all files under a directory (recursively).
+	// The `IndexName` should be set.
+	//
+	// Example:
+	// "/": regexp.MustCompile("((.*).js|(.*).css|(.*).ico)$")
+	// See `MatchCommonAssets` too.
+	PushTargetsRegexp map[string]*regexp.Regexp
 
 	// When files should served under compression.
 	Compress bool
