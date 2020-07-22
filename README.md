@@ -76,6 +76,21 @@ fileSystem = httpfs.MustCache(fileSystem, httpfs.DefaultCacheOptions)
 fileServer := httpfs.FileServer(fileSystem, httpfs.DefaultOptions)
 ```
 
+The optional `Verbose` call can be used while in development status, it outputs something like that:
+
+```go
+httpfs.Verbose(fileSystem)
+```
+
+```sh
+Time to complete the compression and caching of [3/12] files: 11.0022ms
+Total size reduced from 16.2 kB to:
+gzip    (4.6 kB) [71.48%]
+deflate (4.6 kB) [71.82%]
+br      (4.1 kB) [74.46%]
+snappy  (6.5 kB) [59.76%]
+```
+
 Read the available `Options` you can use below:
 
 ```go

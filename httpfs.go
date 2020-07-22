@@ -150,8 +150,6 @@ func FileServer(fs http.FileSystem, options Options) http.Handler {
 			// then don't try to compress it on the fly, even if the options.Compress was set to true.
 			if encoding != "" {
 				// Set the response header we need, the data are already compressed.
-				// w.Header().Set(compress.ContentEncodingHeaderKey, encoding)
-				// w.Header().Set(compress.VaryHeaderKey, compress.AcceptEncodingHeaderKey)
 				compress.AddCompressHeaders(w.Header(), encoding)
 			}
 		} else if options.Compress {

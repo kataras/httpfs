@@ -2,6 +2,7 @@ package httpfs
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -16,22 +17,40 @@ import (
 	"github.com/kataras/compress"
 )
 
+var (
+	// Images a regexp that can be used on `DefaultCacheOptions.CompressIgnore`
+	// to ignore already-compressed images (and pdf).
+	Images = regexp.MustCompile("((.*).pdf|(.*).jpg|(.*).jpeg|(.*).gif|(.*).tif|(.*).tiff)$")
+	// AllEncodings holds the builtin available compression algorithms (encodings),
+	// can be used on `DefaultCacheOptions.Encodings` field.
+	// List of available content encodings:
+	// - gzip,
+	// - deflate,
+	// - br(brotli) and
+	// - snappy.
+	AllEncodings = compress.DefaultOffers
+
+	// DefaultCacheOptions holds the recommended settings
+	// for `CacheOptions` to pass on `Cache` function.
+	DefaultCacheOptions = CacheOptions{
+		CompressMinSize: 300 * B, // Another good value is 1400.
+		// .pdf, .jpg, .jpeg, .gif, .png, .tif, .tiff
+		CompressIgnore: Images,
+		// gzip, deflate, br(brotli), snappy
+		Encodings: AllEncodings,
+	}
+)
+
 // CacheOptions holds the options for the cached file system.
 // See `Cache` package-level function.
 type CacheOptions struct {
+	// Minimium contents size for compression in bytes.
 	CompressMinSize int64
-	CompressIgnore  *regexp.Regexp
-	Encodings       []string
-}
-
-// DefaultCacheOptions holds the recommended settings
-// for `CacheOptions` to pass on `Cache` function.
-var DefaultCacheOptions = CacheOptions{
-	CompressMinSize: 300 * B, // Another good value is 1400.
-	// .pdf, .jpg, .jpeg, .gif, .png, .tif, .tiff
-	CompressIgnore: regexp.MustCompile("((.*).pdf|(.*).jpg|(.*).jpeg|(.*).gif|(.*).tif|(.*).tiff)$"),
-	// gzip, deflate, br(brotli), snappy
-	Encodings: compress.DefaultOffers,
+	// Ignore compress files that match this pattern.
+	CompressIgnore *regexp.Regexp
+	// The available sever's encodings to be negotiated with the client's needs,
+	// common values: gzip, br.
+	Encodings []string
 }
 
 // MustCache same as `Cache` but it panics on init errors.
@@ -45,7 +64,10 @@ func MustCache(fs http.FileSystem, options CacheOptions) http.FileSystem {
 }
 
 // Cache returns a http.FileSystem which serves in-memory cached (compressed) files.
+// Look `Verbose` function to print out information while in development status.
 func Cache(fs http.FileSystem, options CacheOptions) (http.FileSystem, error) {
+	start := time.Now()
+
 	names, err := findNames(fs, "/")
 	if err != nil {
 		return fs, err
@@ -66,11 +88,71 @@ func Cache(fs http.FileSystem, options CacheOptions) (http.FileSystem, error) {
 		return fs, err
 	}
 
-	c := &cacheFS{dirs: dirs, files: files, algs: options.Encodings}
+	ttc := time.Since(start)
+	c := &cacheFS{ttc: ttc, n: len(names), dirs: dirs, files: files, algs: options.Encodings}
 	return c, nil
 }
 
+// VerboseFull if enabled then Verbose will print each file's sizes.
+var VerboseFull = false
+
+// Verbose accepts a FileSystem (a cached one)
+// and prints out the total reduced size per compression.
+// See `Cache` function too.
+func Verbose(fs http.FileSystem) {
+	switch v := fs.(type) {
+	case *cacheFS:
+		verboseCacheFS(v)
+	default:
+	}
+}
+
+func verboseCacheFS(fs *cacheFS) {
+	var (
+		totalLength             int64
+		totalCompressedLength   = make(map[string]int64)
+		totalCompressedContents int64
+	)
+
+	for name, f := range fs.files {
+		uncompressed := f.algs[""]
+		totalLength += int64(len(uncompressed))
+
+		if VerboseFull {
+			fmt.Printf("%s (%s)\n", name, FormatBytes(int64(len(uncompressed))))
+		}
+
+		for alg, contents := range f.algs {
+			if alg == "" {
+				continue
+			}
+
+			totalCompressedContents++
+
+			if len(alg) < 7 {
+				alg += strings.Repeat(" ", 7-len(alg))
+			}
+			totalCompressedLength[alg] += int64(len(contents))
+
+			if VerboseFull {
+				fmt.Printf("%s (%s)\n", alg, FormatBytes(int64(len(contents))))
+			}
+		}
+	}
+
+	fmt.Printf("Time to complete the compression and caching of [%d/%d] files: %s\n", totalCompressedContents/int64(len(fs.algs)), fs.n, fs.ttc)
+	fmt.Printf("Total size reduced from %s to:\n", FormatBytes(totalLength))
+	for alg, length := range totalCompressedLength {
+		// https://en.wikipedia.org/wiki/Data_compression_ratio
+		reducedRatio := 1 - float64(length)/float64(totalLength)
+		fmt.Printf("%s (%s) [%.2f%%]\n", alg, FormatBytes(length), reducedRatio*100)
+	}
+}
+
 type cacheFS struct {
+	ttc time.Duration // time to complete
+	n   int           // total files
+
 	dirs  map[string]*dir
 	files fileMap
 	algs  []string
