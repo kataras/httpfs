@@ -60,7 +60,11 @@ func main() {
 	// http.Handle("/", fileServer)
 
 	// With a prefix, use the httpfs.StripPrefix:
-	fileServer := httpfs.FileServer(http.Dir("./assets"), opts)
+	fileSystem := http.Dir("./assets")
+	fileServer := httpfs.FileServer(fileSystem, opts)
+	// with (compressed) cache:
+	// fileServer := httpfs.FileServer(httpfs.MustCache(fileSystem, httpfs.DefaultCacheOptions), opts)
+
 	http.Handle("/public/", http.StripPrefix("/public/", fileServer))
 	// http.Handle("/", fileServer)
 

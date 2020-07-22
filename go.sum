@@ -1,7 +1,7 @@
 github.com/andybalholm/brotli v1.0.0 h1:7UCwP93aiSfvWpapti8g88vVVGp2qqtGyePsSuDafo4=
 github.com/andybalholm/brotli v1.0.0/go.mod h1:loMXtMfwqflxFJPmdbJO0a3KNoPuLBgiu3qAvBg8x/Y=
-github.com/kataras/compress v0.0.4 h1:y9Er6o8V5//oc/WC4HuN7PemiJt69CrYdGX27Thc5bk=
-github.com/kataras/compress v0.0.4/go.mod h1:xru59oerl89gl/p3nzbmGR12C9+XMdlZ8jNF43XyEPA=
+github.com/kataras/compress v0.0.5 h1:5eB7hq9XQOInw0jUVIqKL634PtjrPz7WhiRz2NR2SwM=
+github.com/kataras/compress v0.0.5/go.mod h1:xru59oerl89gl/p3nzbmGR12C9+XMdlZ8jNF43XyEPA=
 github.com/klauspost/compress v1.10.10 h1:a/y8CglcM7gLGYmlbP/stPE5sR3hbhFRUjCBfd/0B3I=
 github.com/klauspost/compress v1.10.10/go.mod h1:aoV0uJVorq1K+umq18yTdKaF57EivdYsUV+/s2qKfXs=
 golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e h1:EHBhcS0mlXEAVwNyO2dLfjToGsyY4j24pTs2ScHnX7s=

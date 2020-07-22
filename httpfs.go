@@ -44,11 +44,19 @@ func FileServer(fs http.FileSystem, options Options) http.Handler {
 		options.PushTargets[path] = filenames
 	}
 
+	open := func(name string, _ *http.Request) (http.File, error) {
+		return fs.Open(name)
+	}
+
+	if cfs, ok := fs.(*cacheFS); ok {
+		open = cfs.Ropen
+	}
+
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		name := prefix(r.URL.Path, "/")
 		r.URL.Path = name
 
-		f, err := fs.Open(name)
+		f, err := open(name, r)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -62,16 +70,16 @@ func FileServer(fs http.FileSystem, options Options) http.Handler {
 		}
 
 		indexFound := false
-		var indexDirectory http.File
+		//	var indexDirectory http.File
 		// use contents of index.html for directory, if present
 		if info.IsDir() && options.IndexName != "" {
 			index := strings.TrimSuffix(name, "/") + options.IndexName
-			fIndex, err := fs.Open(index)
+			fIndex, err := open(index, r)
 			if err == nil {
 				defer fIndex.Close()
 				infoIndex, err := fIndex.Stat()
 				if err == nil {
-					indexDirectory = f
+					//		indexDirectory = f
 					indexFound = true
 					info = infoIndex
 					f = fIndex
@@ -109,7 +117,7 @@ func FileServer(fs http.FileSystem, options Options) http.Handler {
 		}
 
 		if options.Allow != nil {
-			if !options.Allow(w, r, info.Name()) { // status code should be written.
+			if !options.Allow(w, r, name) { // status code should be written.
 				return
 			}
 		}
@@ -135,7 +143,18 @@ func FileServer(fs http.FileSystem, options Options) http.Handler {
 			}
 		}
 
-		if options.Compress {
+		// the encoding saved from the negotiation.
+		encoding, isCached := GetEncoding(f)
+		if isCached {
+			// if it's cached and its settings didnt allow this file to be compressed
+			// then don't try to compress it on the fly, even if the options.Compress was set to true.
+			if encoding != "" {
+				// Set the response header we need, the data are already compressed.
+				// w.Header().Set(compress.ContentEncodingHeaderKey, encoding)
+				// w.Header().Set(compress.VaryHeaderKey, compress.AcceptEncodingHeaderKey)
+				compress.AddCompressHeaders(w.Header(), encoding)
+			}
+		} else if options.Compress {
 			cr, err := compress.NewResponseWriter(w, r, -1)
 			if err == nil {
 				defer cr.Close()
@@ -158,7 +177,12 @@ func FileServer(fs http.FileSystem, options Options) http.Handler {
 							indexAsset = path.Join(r.RequestURI, indexAsset)
 						}
 
-						if err = pusher.Push(indexAsset, nil); err != nil {
+						var pushOpts *http.PushOptions
+						if encoding != "" {
+							pushOpts = &http.PushOptions{Header: r.Header}
+						}
+
+						if err = pusher.Push(indexAsset, pushOpts); err != nil {
 							break
 						}
 					}
@@ -168,19 +192,30 @@ func FileServer(fs http.FileSystem, options Options) http.Handler {
 			if regex, ok := options.PushTargetsRegexp[r.URL.Path]; ok {
 				if pusher, ok := w.(http.Pusher); ok {
 					prefixURL := strings.TrimSuffix(r.RequestURI, name)
+					if prefixURL == "" {
+						prefixURL = "/"
+					}
 
-					for _, indexAsset := range getFilenamesRecursively(fs, indexDirectory, name) {
-						// it's an index file, do not pushed that.
-						if strings.HasSuffix("/"+indexAsset, options.IndexName) {
-							continue
-						}
+					names, err := findNames(fs, name)
+					if err == nil {
+						for _, indexAsset := range names {
+							// it's an index file, do not pushed that.
+							if strings.HasSuffix("/"+indexAsset, options.IndexName) {
+								continue
+							}
 
-						// match using relative path (without the first '/' slash)
-						// to keep consistency between the `PushTargets` behavior
-						if regex.MatchString(indexAsset) {
-							// println("Regex Matched: " + indexAsset)
-							if err = pusher.Push(path.Join(prefixURL, indexAsset), nil); err != nil {
-								break
+							// match using relative path (without the first '/' slash)
+							// to keep consistency between the `PushTargets` behavior
+							if regex.MatchString(indexAsset) {
+								// println("Pushing: " + path.Join(prefixURL, indexAsset))
+								var pushOpts *http.PushOptions
+								if encoding != "" {
+									pushOpts = &http.PushOptions{Header: r.Header}
+								}
+
+								if err = pusher.Push(path.Join(prefixURL, indexAsset), pushOpts); err != nil {
+									break
+								}
 							}
 						}
 					}
@@ -192,38 +227,6 @@ func FileServer(fs http.FileSystem, options Options) http.Handler {
 	}
 
 	return http.HandlerFunc(handler)
-}
-
-func getFilenamesRecursively(fs http.FileSystem, f http.File, parent string) []string {
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		return nil
-	}
-
-	var filenames []string
-
-	if info.IsDir() {
-		fileinfos, err := f.Readdir(-1)
-		if err != nil {
-			return nil
-		}
-
-		for _, fileinfo := range fileinfos {
-			fullname := path.Join(parent, fileinfo.Name())
-			ff, err := fs.Open(fullname)
-			if err != nil {
-				return nil
-			}
-
-			filenames = append(filenames, getFilenamesRecursively(fs, ff, fullname)...)
-		}
-
-		return filenames
-	}
-
-	filenames = append(filenames, path.Dir(path.Join(parent, info.Name())))
-	return filenames
 }
 
 // rateReadSeeker is a io.ReadSeeker that is rate limited by

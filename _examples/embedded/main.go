@@ -9,11 +9,11 @@ import (
 )
 
 // Follow the steps below:
-// $ go get -u github.com/go-bindata/go-bindata/...
+// $ go get -u github.com/go-bindata/go-bindata/v3/go-bindata
 //
-// $ go-bindata -nomemcopy -prefix "../basic/" ../basic/assets/...
+// $ go-bindata -fs -nomemcopy -prefix "../basic/assets" ../basic/assets/...
 // # OR if the ./assets directory was inside this example foder:
-// # go-bindata -nomemcopy ./assets/...
+// # go-bindata -fs -nomemcopy -prefix "assets" ./assets/...
 //
 // $ go run .
 // Physical files are not used, you can delete the "assets" folder and run the example.
@@ -32,10 +32,10 @@ var opts = httpfs.Options{
 }
 
 func main() {
-	fileSystem := httpfs.EmbeddedDir("./assets", Asset, AssetInfo, AssetNames)
+	fileSystem := AssetFile()
+	// with (compressed) cache:
+	// fileSystem := httpfs.MustCache(fileSystem, httpfs.DefaultCacheOptions)
 	fileServer := httpfs.FileServer(fileSystem, opts)
-	// fileServer = http.StripPrefix("/public/", fileServer)
-	// http.Handle("/public/", fileServer)
 	http.Handle("/", fileServer)
 
 	log.Println("Server started at: https://127.0.0.1")

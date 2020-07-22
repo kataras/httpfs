@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -117,7 +118,7 @@ func DirList(w http.ResponseWriter, r *http.Request, dirOptions Options, dirName
 	}
 
 	for _, d := range dirs {
-		name := d.Name()
+		name := path.Base(filepath.ToSlash(d.Name()))
 
 		// dirName is not the full path.
 		// fixes the "app2/app2app3/mydir"
@@ -136,7 +137,7 @@ func DirList(w http.ResponseWriter, r *http.Request, dirOptions Options, dirName
 			downloadAttr = " download" // fixes chrome Resource interpreted, other browsers will just ignore this <a> attribute.
 		}
 
-		viewName := name
+		viewName := path.Base(name)
 		if d.IsDir() {
 			viewName += "/"
 		}
@@ -215,9 +216,9 @@ func DirListRich(options DirListRichOptions) DirListFunc {
 		}
 
 		for _, d := range dirs {
-			name := d.Name()
-
+			name := path.Base(filepath.ToSlash(d.Name()))
 			upath := ""
+
 			if !strings.HasSuffix(r.URL.Path, "/") && dirName != "" {
 				upath = "./" + path.Base(dirName) + "/" + name
 			} else {
@@ -246,23 +247,26 @@ func DirListRich(options DirListRichOptions) DirListFunc {
 	}
 }
 
+// FormatBytes returns the string representation of "b" length bytes.
+func FormatBytes(b int64) string {
+	const unit = 1000
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB",
+		float64(b)/float64(div), "kMGTPE"[exp])
+}
+
 // DirListRichTemplate is the html template the `DirListRich` function is using to render
 // the directories and files.
 var DirListRichTemplate = template.Must(template.New("").
 	Funcs(template.FuncMap{
-		"formatBytes": func(b int64) string {
-			const unit = 1000
-			if b < unit {
-				return fmt.Sprintf("%d B", b)
-			}
-			div, exp := int64(unit), 0
-			for n := b / unit; n >= unit; n /= unit {
-				div *= unit
-				exp++
-			}
-			return fmt.Sprintf("%.1f %cB",
-				float64(b)/float64(div), "kMGTPE"[exp])
-		},
+		"formatBytes": FormatBytes,
 	}).Parse(`
 <!DOCTYPE html>
 <html lang="en">

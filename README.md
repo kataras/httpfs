@@ -5,8 +5,9 @@
 Like [http.FileServer](https://pkg.go.dev/net/http?tab=doc#FileServer), plus the following features:
 
 - Embedded files through [go-bindata](https://github.com/go-bindata/go-bindata)
+- In-memory file system with pre-compressed files **NEW**
 - HTTP/2 Push Targets on index requests
-- On fly [fast](https://github.com/kataras/compress) [gzip](https://en.wikipedia.org/wiki/Gzip), [deflate](https://en.wikipedia.org/wiki/DEFLATE), [brotli](https://en.wikipedia.org/wiki/Brotli) and [snappy](https://en.wikipedia.org/wiki/Snappy_(compression)) compression based on the client's needs
+- [Fast](https://github.com/kataras/compress) [gzip](https://en.wikipedia.org/wiki/Gzip), [deflate](https://en.wikipedia.org/wiki/DEFLATE), [brotli](https://en.wikipedia.org/wiki/Brotli) and [snappy](https://en.wikipedia.org/wiki/Snappy_(compression)) compression based on the client's needs
 - Content [disposition](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Disposition) and download speed limits
 - Customize directory listing by a [template](https://pkg.go.dev/html/template?tab=doc#Template) file or an `index.html`
 - Validator for each file per request, e.g. check permissions before serve a file
@@ -32,7 +33,7 @@ The `httpfs` package is fully compatible with the standard library. Use `FileSer
 For system files you can use the [http.Dir](https://golang.org/pkg/net/http/#Dir):
 
 ```go
- fileServer := httpfs.FileServer(http.Dir("./assets"), httpfs.DefaultOptions)
+fileServer := httpfs.FileServer(http.Dir("./assets"), httpfs.DefaultOptions)
 ```
 
 Where `httpfs.DefaultOptions` looks like this:
@@ -56,10 +57,22 @@ Register the `FileServer` handler:
 http.Handle("/public/", fileServer)
 ```
 
-To serve files that are translated as Go code, located inside the executable program itself, use the `EmbeddedDir` instead of `http.Dir`. Based on the [generated](https://github.com/go-bindata/go-bindata) `Asset`, `AssetInfo` and `AssetNames` functions:
+To serve files that are translated as Go code, inside the executable program itself, use the [generated](https://github.com/go-bindata/go-bindata) `AssetFile()` instead of `http.Dir`:
 
 ```go
-fileSystem := httpfs.EmbeddedDir("./assets", Asset, AssetInfo, AssetNames)
+fileServer := httpfs.FileServer(AssetFile(), httpfs.DefaultOptions)
+```
+
+To cache and compress files(gzip, deflate, snappy and brotli) before server ran, wrap any file system (embedded or physical) with the `MustAsset(http.FileSystem, CacheOptions)` function:
+
+
+```go
+var fileSystem http.FileSystem
+
+// fileSystem = http.Dir("./assets")
+fileSystem = AssetFile()
+fileSystem = httpfs.MustCache(fileSystem, httpfs.DefaultCacheOptions)
+
 fileServer := httpfs.FileServer(fileSystem, httpfs.DefaultOptions)
 ```
 
