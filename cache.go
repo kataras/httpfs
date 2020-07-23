@@ -2,6 +2,7 @@ package httpfs
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -11,6 +12,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kataras/compress"
@@ -81,7 +83,7 @@ func Cache(fs http.FileSystem, options CacheOptions) (http.FileSystem, error) {
 		return fs, err
 	}
 
-	files, err := cacheFiles(fs, names,
+	files, err := cacheFiles(context.Background(), fs, names,
 		options.Encodings, options.CompressMinSize, options.CompressIgnore)
 	if err != nil {
 		return fs, err
@@ -238,19 +240,23 @@ func GetEncoding(f http.File) (string, bool) {
 // type fileMap map[string] /* path */ map[string] /*compression alg or empty for original */ []byte /*contents */
 type fileMap map[string]*file
 
-func cacheFiles(fs http.FileSystem, names []string, compressAlgs []string, compressMinSize int64, compressIgnore *regexp.Regexp) (fileMap, error) {
-	list := make(fileMap, len(names))
+func cacheFiles(ctx context.Context, fs http.FileSystem, names []string, compressAlgs []string, compressMinSize int64, compressIgnore *regexp.Regexp) (fileMap, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	for _, name := range names {
+	list := make(fileMap, len(names))
+	mutex := new(sync.Mutex)
+
+	cache := func(name string) error {
 		f, err := fs.Open(name)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		inf, err := f.Stat()
 		if err != nil {
 			f.Close()
-			return nil, err
+			return err
 		}
 
 		fi := newFileInfo(path.Base(name), inf.Mode(), inf.ModTime())
@@ -258,35 +264,50 @@ func cacheFiles(fs http.FileSystem, names []string, compressAlgs []string, compr
 		contents, err := ioutil.ReadAll(f)
 		f.Close()
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		algs := make(map[string][]byte, len(compressAlgs)+1)
 		algs[""] = contents // original contents.
 
+		mutex.Lock()
 		list[name] = newFile(name, fi, algs)
+		mutex.Unlock()
 		if compressMinSize > 0 && compressMinSize > int64(len(contents)) {
-			continue
+			return nil
 		}
 
 		if compressIgnore != nil && compressIgnore.MatchString(name) {
-			continue
+			return nil
 		}
 
+		// Note:
+		// We can fire a new goroutine for each compression of the same file
+		// but this will have an impact on CPU cost if
+		// thousands of files running 4 compressions at the same time,
+		// so, unless requested keep it as it's.
 		buf := new(bytes.Buffer)
 		for _, alg := range compressAlgs {
+			// stop all compressions if at least one file failed to.
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				break
+			}
+
 			if alg == "brotli" {
 				alg = "br"
 			}
 
 			w, err := compress.NewWriter(buf, strings.ToLower(alg), -1)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			_, err = w.Write(contents)
 			w.Close()
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			bs := buf.Bytes()
@@ -296,9 +317,33 @@ func cacheFiles(fs http.FileSystem, names []string, compressAlgs []string, compr
 
 			buf.Reset()
 		}
+
+		return nil
 	}
 
-	return list, nil
+	var (
+		err     error
+		wg      sync.WaitGroup
+		errOnce sync.Once
+	)
+
+	for _, name := range names {
+		wg.Add(1)
+
+		go func(name string) {
+			defer wg.Done()
+
+			if fnErr := cache(name); fnErr != nil {
+				errOnce.Do(func() {
+					err = fnErr
+					cancel()
+				})
+			}
+		}(name)
+	}
+
+	wg.Wait()
+	return list, err
 }
 
 type cacheStoreFile interface {
