@@ -187,6 +187,12 @@ func (c *cacheFS) Open(name string) (http.File, error) {
 	return nil, os.ErrNotExist
 }
 
+type ropener interface {
+	Ropen(name string, r *http.Request) (http.File, error)
+}
+
+var _ ropener = (*cacheFS)(nil)
+
 // Ropen returns the http.File based on "name".
 // If file, it negotiates the content encoding,
 // based on the given algorithms, and

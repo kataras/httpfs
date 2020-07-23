@@ -15,6 +15,39 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// PrefixDir returns a new FileSystem that opens files
+// by adding the given "prefix" to the directory tree of "fs".
+func PrefixDir(prefix string, fs http.FileSystem) http.FileSystem {
+	if r, ok := fs.(ropener); ok {
+		return &prefixedRopener{prefix, fs, r}
+	}
+
+	return &prefixedDir{prefix, fs}
+}
+
+type (
+	prefixedDir struct {
+		prefix string
+		fs     http.FileSystem
+	}
+
+	prefixedRopener struct {
+		prefix string
+		http.FileSystem
+		ropener
+	}
+)
+
+func (p *prefixedDir) Open(name string) (http.File, error) {
+	name = path.Join(p.prefix, name)
+	return p.fs.Open(name)
+}
+
+func (p *prefixedRopener) Ropen(name string, r *http.Request) (http.File, error) {
+	name = path.Join(p.prefix, name)
+	return p.ropener.Ropen(name, r)
+}
+
 // FileServer returns a http.Handler which serves directories and files.
 // The first parameter is the File System (usually `http.Dir` one).
 // The second parameter is used to pass options
@@ -48,8 +81,8 @@ func FileServer(fs http.FileSystem, options Options) http.Handler {
 		return fs.Open(name)
 	}
 
-	if cfs, ok := fs.(*cacheFS); ok {
-		open = cfs.Ropen
+	if r, ok := fs.(ropener); ok {
+		open = r.Ropen
 	}
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
@@ -143,6 +176,11 @@ func FileServer(fs http.FileSystem, options Options) http.Handler {
 			}
 		}
 
+		pusher, ok := w.(http.Pusher) // before compress writer.
+		if !ok {
+			pusher = nil
+		}
+
 		// the encoding saved from the negotiation.
 		encoding, isCached := GetEncoding(f)
 		if isCached {
@@ -160,60 +198,57 @@ func FileServer(fs http.FileSystem, options Options) http.Handler {
 			}
 		}
 
-		if indexFound && !options.Attachments.Enable {
+		if (len(options.PushTargets) > 0 || len(options.PushTargetsRegexp) > 0) &&
+			pusher != nil && indexFound && !options.Attachments.Enable {
+
+			var pushOpts *http.PushOptions
+			if encoding != "" {
+				// pushOpts = &http.PushOptions{Header: http.Header{
+				// 	"Accept-Encoding": r.Header["Accept-Encoding"],
+				// }}
+				// OR just pass the whole current request's headers (e.g. a request id may be assigned).
+				pushOpts = &http.PushOptions{Header: r.Header}
+			}
+
 			if indexAssets, ok := options.PushTargets[r.URL.Path]; ok {
-				if pusher, ok := w.(http.Pusher); ok {
-					// Let's not try to use relative, give developer a clean control.
-					// rel := r.URL.Path
-					// if !info.IsDir() {
-					// 	rel = path.Dir(rel)
-					// }
-					// path.Join(rel, indexAsset)
-					for _, indexAsset := range indexAssets {
-						if indexAsset[0] != '/' {
-							// it's relative path.
-							indexAsset = path.Join(r.RequestURI, indexAsset)
-						}
+				// Let's not try to use relative, give developer a clean control.
+				// rel := r.URL.Path
+				// if !info.IsDir() {
+				// 	rel = path.Dir(rel)
+				// }
+				// path.Join(rel, indexAsset)
+				for _, indexAsset := range indexAssets {
+					if indexAsset[0] != '/' {
+						// it's relative path.
+						indexAsset = path.Join(r.RequestURI, indexAsset)
+					}
 
-						var pushOpts *http.PushOptions
-						if encoding != "" {
-							pushOpts = &http.PushOptions{Header: r.Header}
-						}
-
-						if err = pusher.Push(indexAsset, pushOpts); err != nil {
-							break
-						}
+					if err = pusher.Push(indexAsset, pushOpts); err != nil {
+						break
 					}
 				}
 			}
 
 			if regex, ok := options.PushTargetsRegexp[r.URL.Path]; ok {
-				if pusher, ok := w.(http.Pusher); ok {
-					prefixURL := strings.TrimSuffix(r.RequestURI, name)
-					if prefixURL == "" {
-						prefixURL = "/"
-					}
+				prefixURL := strings.TrimSuffix(r.RequestURI, name)
+				if prefixURL == "" {
+					prefixURL = "/"
+				}
 
-					names, err := findNames(fs, name)
-					if err == nil {
-						for _, indexAsset := range names {
-							// it's an index file, do not pushed that.
-							if strings.HasSuffix("/"+indexAsset, options.IndexName) {
-								continue
-							}
+				names, err := findNames(fs, name)
+				if err == nil {
+					for _, indexAsset := range names {
+						// it's an index file, do not pushed that.
+						if strings.HasSuffix("/"+indexAsset, options.IndexName) {
+							continue
+						}
 
-							// match using relative path (without the first '/' slash)
-							// to keep consistency between the `PushTargets` behavior
-							if regex.MatchString(indexAsset) {
-								// println("Pushing: " + path.Join(prefixURL, indexAsset))
-								var pushOpts *http.PushOptions
-								if encoding != "" {
-									pushOpts = &http.PushOptions{Header: r.Header}
-								}
-
-								if err = pusher.Push(path.Join(prefixURL, indexAsset), pushOpts); err != nil {
-									break
-								}
+						// match using relative path (without the first '/' slash)
+						// to keep consistency between the `PushTargets` behavior
+						if regex.MatchString(indexAsset) {
+							// println("Pushing: " + path.Join(prefixURL, indexAsset))
+							if err = pusher.Push(path.Join(prefixURL, indexAsset), pushOpts); err != nil {
+								break
 							}
 						}
 					}
