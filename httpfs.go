@@ -335,3 +335,22 @@ func prefix(s string, prefix string) string {
 
 	return s
 }
+
+// Instead of path.Base(filepath.ToSlash(s))
+// let's do something like that, it is faster
+// (used to list directories on serve-time too):
+func toBaseName(s string) string {
+	n := len(s) - 1
+	for i := n; i >= 0; i-- {
+		if c := s[i]; c == '/' || c == '\\' {
+			if i == n {
+				// "s" ends with a slash, remove it and retry.
+				return toBaseName(s[:n])
+			}
+
+			return s[i+1:] // return the rest, trimming the slash.
+		}
+	}
+
+	return s
+}

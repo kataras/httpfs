@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -397,7 +396,7 @@ func findNames(fs http.FileSystem, name string) ([]string, error) {
 		// Note:
 		// go-bindata has absolute names with os.Separator,
 		// http.Dir the basename.
-		filename := path.Base(filepath.ToSlash(info.Name()))
+		filename := toBaseName(info.Name())
 		fullname := path.Join(name, filename)
 		if fullname == name { // prevent looping through itself when fs is cacheFS.
 			continue

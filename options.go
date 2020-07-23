@@ -9,10 +9,8 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"sort"
-	"strings"
 )
 
 // Byte unit helpers.
@@ -118,18 +116,9 @@ func DirList(w http.ResponseWriter, r *http.Request, dirOptions Options, dirName
 	}
 
 	for _, d := range dirs {
-		name := path.Base(filepath.ToSlash(d.Name()))
+		name := toBaseName(d.Name())
 
-		// dirName is not the full path.
-		// fixes the "app2/app2app3/mydir"
-		// which should be "app2/app2app3/mydir/".
-		upath := ""
-		if !strings.HasSuffix(r.URL.Path, "/") && dirName != "" {
-			upath = "./" + path.Base(dirName) + "/" + name
-		} else {
-			upath = "./" + name
-		}
-
+		upath := path.Join(r.RequestURI, name)
 		url := url.URL{Path: upath}
 
 		downloadAttr := ""
@@ -216,15 +205,9 @@ func DirListRich(options DirListRichOptions) DirListFunc {
 		}
 
 		for _, d := range dirs {
-			name := path.Base(filepath.ToSlash(d.Name()))
-			upath := ""
+			name := toBaseName(d.Name())
 
-			if !strings.HasSuffix(r.URL.Path, "/") && dirName != "" {
-				upath = "./" + path.Base(dirName) + "/" + name
-			} else {
-				upath = "./" + name
-			}
-
+			upath := path.Join(r.RequestURI, name)
 			url := url.URL{Path: upath}
 
 			viewName := name
