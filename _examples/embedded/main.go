@@ -40,6 +40,8 @@ func main() {
 		$ go-bindata -fs -nomemcopy -prefix "../basic/" ../basic/assets/...
 
 		fileSystem := httpfs.PrefixDir("assets", fileSystem)
+		OR (modifies the Request.URL.Path):
+		http.Handle("/", httpfs.Prefix("assets", fileServer))
 
 		With (compressed) cache:
 

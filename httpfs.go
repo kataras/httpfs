@@ -15,6 +15,15 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// Prefix returns a http.Handler that adds a "prefix" to the request path.
+// Use the `PrefixDir` instead when you don't want to alter the request path.
+func Prefix(prefix string, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.URL.Path = path.Join(prefix, r.URL.Path)
+		h.ServeHTTP(w, r)
+	})
+}
+
 // PrefixDir returns a new FileSystem that opens files
 // by adding the given "prefix" to the directory tree of "fs".
 func PrefixDir(prefix string, fs http.FileSystem) http.FileSystem {
