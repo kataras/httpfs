@@ -45,7 +45,7 @@ var (
 // CacheOptions holds the options for the cached file system.
 // See `Cache` package-level function.
 type CacheOptions struct {
-	// Minimium contents size for compression in bytes.
+	// Minimum contents size for compression in bytes.
 	CompressMinSize int64
 	// Ignore compress files that match this pattern.
 	CompressIgnore *regexp.Regexp
