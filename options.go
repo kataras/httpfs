@@ -81,6 +81,11 @@ type Options struct {
 	// Optional validator that loops through each requested resource.
 	// Note: response writer is given to manually write an error code, e.g. 404 or 400.
 	Allow func(w http.ResponseWriter, r *http.Request, name string) bool
+
+	// If enabled then the router will render the index file on any not-found file
+	// instead of firing the 404 error code handler.
+	// Make sure the `IndexName` field is set.
+	SPA bool
 }
 
 // Attachments options for files to be downloaded and saved locally by the client.

@@ -98,11 +98,32 @@ func FileServer(fs http.FileSystem, options Options) http.Handler {
 		name := prefix(r.URL.Path, "/")
 		r.URL.Path = name
 
+		var (
+			indexFound bool
+			noRedirect bool
+		)
+
 		f, err := open(name, r)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			return
+			if options.SPA && name != options.IndexName {
+				oldname := name
+				name = prefix(options.IndexName, "/") // to match push targets.
+				r.URL.Path = name
+				f, err = open(name, r) // try find the main index.
+				if err != nil {
+					r.URL.Path = oldname
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+
+				indexFound = true // to support push targets.
+				noRedirect = true // to disable redirecting back to /.
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
 		}
+
 		defer f.Close()
 
 		info, err := f.Stat()
@@ -111,7 +132,6 @@ func FileServer(fs http.FileSystem, options Options) http.Handler {
 			return
 		}
 
-		indexFound := false
 		//	var indexDirectory http.File
 		// use contents of index.html for directory, if present
 		if info.IsDir() && options.IndexName != "" {
@@ -153,7 +173,7 @@ func FileServer(fs http.FileSystem, options Options) http.Handler {
 
 		// index requested, send a moved permanently status
 		// and navigate back to the route without the index suffix.
-		if options.IndexName != "" && strings.HasSuffix(name, options.IndexName) {
+		if !noRedirect && options.IndexName != "" && strings.HasSuffix(name, options.IndexName) {
 			localRedirect(w, r, "./")
 			return
 		}

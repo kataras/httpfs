@@ -4,6 +4,7 @@
 
 Like [http.FileServer](https://pkg.go.dev/net/http?tab=doc#FileServer), plus the following features:
 
+- Single Page Application **[NEW](_examples/single-page-application)**
 - Embedded files through [go-bindata](https://github.com/go-bindata/go-bindata)
 - In-memory file system with pre-compressed files **NEW**
 - HTTP/2 Push Targets on index requests
