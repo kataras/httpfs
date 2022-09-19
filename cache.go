@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -267,7 +266,7 @@ func cacheFiles(ctx context.Context, fs http.FileSystem, names []string, compres
 
 		fi := newFileInfo(path.Base(name), inf.Mode(), inf.ModTime())
 
-		contents, err := ioutil.ReadAll(f)
+		contents, err := io.ReadAll(f)
 		f.Close()
 		if err != nil {
 			return err
@@ -294,12 +293,10 @@ func cacheFiles(ctx context.Context, fs http.FileSystem, names []string, compres
 		// so, unless requested keep it as it's.
 		buf := new(bytes.Buffer)
 		for _, alg := range compressAlgs {
-			// stop all compressions if at least one file failed to.
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				return ctx.Err() // stop all compressions if at least one file failed to.
 			default:
-				break
 			}
 
 			if alg == "brotli" {

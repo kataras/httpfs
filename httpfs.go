@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -32,6 +33,26 @@ func PrefixDir(prefix string, fs http.FileSystem) http.FileSystem {
 	}
 
 	return &prefixedDir{prefix, fs}
+}
+
+// PrefixFS returns a new FileSystem that opens files
+// by adding the given "prefix" to the directory tree of "fileSystem".
+//
+// Usage with embed.FS and fs.FS:
+// import "io/fs"
+// import "embed"
+//
+// //go:embed assets/*
+// var filesystem embed.FS
+//
+// subFilesystem, err := fs.Sub(filesystem, "assets")
+// PrefixFS("/public", subFilesystem)
+func PrefixFS(prefix string, fileSystem fs.FS) http.FileSystem {
+	if r, ok := fileSystem.(ropener); ok {
+		return &prefixedRopener{prefix, http.FS(fileSystem), r}
+	}
+
+	return &prefixedDir{prefix, http.FS(fileSystem)}
 }
 
 type (
@@ -340,13 +361,14 @@ func writeLastModified(w http.ResponseWriter, modtime time.Time) {
 // errPreconditionFailed may be returned from `checkIfModifiedSince` function.
 // Usage:
 // ok, err := checkIfModifiedSince(modTime)
-// if err != nil {
-//    if errors.Is(err, errPreconditionFailed) {
-//         [handle missing client conditions,such as not valid request method...]
-//     }else {
-//         [the error is probably a time parse error...]
-//    }
-// }
+//
+//	if err != nil {
+//	   if errors.Is(err, errPreconditionFailed) {
+//	        [handle missing client conditions,such as not valid request method...]
+//	    }else {
+//	        [the error is probably a time parse error...]
+//	   }
+//	}
 var errPreconditionFailed = errors.New("precondition failed")
 
 // checkIfModifiedSince checks if the response is modified since the "modtime".
