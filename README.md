@@ -1,6 +1,6 @@
 # HTTP File Server
 
-[![build status](https://img.shields.io/github/workflow/status/kataras/httpfs/CI/master?style=for-the-badge)](https://github.com/kataras/httpfs/actions) [![report card](https://img.shields.io/badge/report%20card-a%2B-ff3333.svg?style=for-the-badge)](https://goreportcard.com/report/github.com/kataras/httpfs) [![godocs](https://img.shields.io/badge/go-%20docs-488AC7.svg?style=for-the-badge)](https://godoc.org/github.com/kataras/httpfs)
+[![build status](https://img.shields.io/github/actions/workflow/status/kataras/httpfs/ci.yml?style=for-the-badge)](https://github.com/kataras/httpfs/actions) [![report card](https://img.shields.io/badge/report%20card-a%2B-ff3333.svg?style=for-the-badge)](https://goreportcard.com/report/github.com/kataras/httpfs) [![godocs](https://img.shields.io/badge/go-%20docs-488AC7.svg?style=for-the-badge)](https://godoc.org/github.com/kataras/httpfs)
 
 Like [http.FileServer](https://pkg.go.dev/net/http?tab=doc#FileServer), plus the following features:
 
