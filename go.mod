@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/kataras/compress v0.0.6
-	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
+	golang.org/x/time v0.3.0
 )
 
 require (
